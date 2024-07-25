@@ -1,6 +1,6 @@
 # beam_sre_kata
 
-# Deploying containerized AWS web app with Redis dependecy 
+# Deploying containerized AWS web app with Redis dependency
 
 * Redis
 * ECS 
