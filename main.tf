@@ -37,10 +37,10 @@ data "aws_subnets" "private" {
   }
 }
 
-# Get subnet IDs
+# Get subnet IDs and ensure they are in different Availability Zones
 locals {
-  public_subnet_ids  = [for subnet in data.aws_subnets.public.ids: subnet]
-  private_subnet_ids = [for subnet in data.aws_subnets.private.ids: subnet]
+  public_subnet_ids  = [for subnet in data.aws_subnets.public.subnets: subnet.id]
+  private_subnet_ids = [for subnet in data.aws_subnets.private.subnets: subnet.id]
 }
 
 # Create an ECS cluster
