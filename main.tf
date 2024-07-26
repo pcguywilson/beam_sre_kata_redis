@@ -5,8 +5,8 @@ provider "aws" {
 # Define a tag map
 locals {
   common_tags = {
-    Owner = "Swilson"
-    Name  = "beamkata"
+    Owner = "var.resource_owner"
+    Name  = "var.app_name"
   }
 }
 
@@ -43,13 +43,13 @@ data "aws_subnet" "private" {
 
 # Create an ECS cluster
 resource "aws_ecs_cluster" "webapp_cluster" {
-  name = "beamkata-cluster"
+  name = "${var.app_name}-cluster"
   tags = local.common_tags
 }
 
 # Create a security group
 resource "aws_security_group" "webapp_sg" {
-  name        = "beamkata-sg"
+  name        = "${var.app_name}-sg"
   description = "Allow traffic to beamkata web app"
   vpc_id      = data.aws_vpc.selected.id
 
@@ -79,7 +79,7 @@ resource "aws_security_group" "webapp_sg" {
 
 # Create an ElastiCache Redis cluster
 resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = "beamkata-redis-cluster"
+  cluster_id           = "${var.app_name}-redis-cluster"
   engine               = "redis"
   node_type            = var.redis_node_type
   num_cache_nodes      = 1
@@ -92,21 +92,21 @@ resource "aws_elasticache_cluster" "redis" {
 }
 
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
-  name       = "beamkata-redis-subnet-group"
+  name       = "${var.app_name}-redis-subnet-group"
   subnet_ids = data.aws_subnet.private.*.id
   tags       = local.common_tags
 }
 
 # Create an ECS task definition
 resource "aws_ecs_task_definition" "webapp_task" {
-  family                   = "beamkata-webapp-task"
+  family                   = "${var.app_name}-webapp-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
 
   container_definitions = jsonencode([{
-    name      = "beamkata-webapp"
+    name      = "${var.app_name}-webapp"
     image     = var.docker_image
     essential = true
     portMappings = [{
@@ -126,7 +126,7 @@ resource "aws_ecs_task_definition" "webapp_task" {
 
 # Create an ECS service
 resource "aws_ecs_service" "webapp_service" {
-  name            = "beamkata-webapp-service"
+  name            = "${var.app_name}-webapp-service"
   cluster         = aws_ecs_cluster.webapp_cluster.id
   task_definition = aws_ecs_task_definition.webapp_task.arn
   launch_type     = "FARGATE"
@@ -139,7 +139,7 @@ resource "aws_ecs_service" "webapp_service" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.webapp_tg.arn
-    container_name   = "beamkata-webapp"
+    container_name   = "${var.app_name}-webapp"
     container_port   = 4567
   }
 
@@ -148,7 +148,7 @@ resource "aws_ecs_service" "webapp_service" {
 
 # Create an Application Load Balancer
 resource "aws_lb" "webapp_lb" {
-  name               = "beamkata-webapp-lb"
+  name               = "${var.app_name}-webapp-lb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.webapp_sg.id]
@@ -161,7 +161,7 @@ resource "aws_lb" "webapp_lb" {
 
 # Create a target group for the load balancer
 resource "aws_lb_target_group" "webapp_tg" {
-  name     = "beamkata-webapp-tg"
+  name     = "${var.app_name}-webapp-tg"
   port     = 4567
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.selected.id
