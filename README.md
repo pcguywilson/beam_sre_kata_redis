@@ -75,7 +75,7 @@ After the deployment, you can access your web application using the DNS name of 
 
 ```sh
 echo $(terraform output load_balancer_dns)
-
+```
 
 ## Cleaning Up
 
