@@ -1,6 +1,14 @@
 variable "aws_region" {
   default = "us-east-2"
 }
+variable "resource_owner" {
+  description = "Name used when tagging owner"
+  default     = "SWilson"
+}
+variable "app_name" {
+  description = "Name of app"
+  default     = "beamkata"
+}
 
 variable "vpc_id" {
   description = "The ID of the VPC"
