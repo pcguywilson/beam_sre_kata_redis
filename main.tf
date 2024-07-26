@@ -5,8 +5,8 @@ provider "aws" {
 # Define a tag map
 locals {
   common_tags = {
-    Owner = "var.resource_owner"
-    Name  = "var.app_name"
+    Owner = var.resource_owner
+    Name  = var.app_name
   }
 }
 
@@ -15,30 +15,28 @@ data "aws_vpc" "selected" {
   id = var.vpc_id
 }
 
-data "aws_subnet_ids" "public" {
-  vpc_id = data.aws_vpc.selected.id
+data "aws_subnets" "public" {
   filter {
     name   = "tag:Name"
     values = ["public"]
   }
+
+  vpc_id = data.aws_vpc.selected.id
 }
 
-data "aws_subnet_ids" "private" {
-  vpc_id = data.aws_vpc.selected.id
+data "aws_subnets" "private" {
   filter {
     name   = "tag:Name"
     values = ["private"]
   }
+
+  vpc_id = data.aws_vpc.selected.id
 }
 
-data "aws_subnet" "public" {
-  count = length(data.aws_subnet_ids.public.ids)
-  id    = element(data.aws_subnet_ids.public.ids, count.index)
-}
-
-data "aws_subnet" "private" {
-  count = length(data.aws_subnet_ids.private.ids)
-  id    = element(data.aws_subnet_ids.private.ids, count.index)
+# Get subnet IDs
+locals {
+  public_subnet_ids  = [for subnet in data.aws_subnets.public.ids: subnet.id]
+  private_subnet_ids = [for subnet in data.aws_subnets.private.ids: subnet.id]
 }
 
 # Create an ECS cluster
@@ -93,7 +91,7 @@ resource "aws_elasticache_cluster" "redis" {
 
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   name       = "${var.app_name}-redis-subnet-group"
-  subnet_ids = data.aws_subnet.private.*.id
+  subnet_ids = local.private_subnet_ids
   tags       = local.common_tags
 }
 
@@ -133,7 +131,7 @@ resource "aws_ecs_service" "webapp_service" {
   desired_count   = 1
 
   network_configuration {
-    subnets         = data.aws_subnet.public.*.id
+    subnets         = local.public_subnet_ids
     security_groups = [aws_security_group.webapp_sg.id]
   }
 
@@ -152,7 +150,7 @@ resource "aws_lb" "webapp_lb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.webapp_sg.id]
-  subnets            = data.aws_subnet.public.*.id
+  subnets            = local.public_subnet_ids
 
   enable_deletion_protection = false
 
