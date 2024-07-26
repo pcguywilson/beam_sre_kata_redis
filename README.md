@@ -75,3 +75,21 @@ After the deployment, you can access your web application using the DNS name of 
 
 ```sh
 echo $(terraform output load_balancer_dns)
+
+
+## Cleaning Up
+
+To destroy the resources created by this Terraform configuration:
+
+
+Confirm the destroy step by typing `yes` when prompted.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+**SWilson**
+
+For any questions or suggestions, feel free to contact me.
