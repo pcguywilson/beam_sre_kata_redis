@@ -15,22 +15,16 @@ data "aws_vpc" "selected" {
   id = var.vpc_id
 }
 
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.selected.id]
-  }
+data "aws_subnet_ids" "public" {
+  vpc_id = data.aws_vpc.selected.id
   filter {
     name   = "tag:Name"
     values = ["public"]
   }
 }
 
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.selected.id]
-  }
+data "aws_subnet_ids" "private" {
+  vpc_id = data.aws_vpc.selected.id
   filter {
     name   = "tag:Name"
     values = ["private"]
@@ -39,8 +33,8 @@ data "aws_subnets" "private" {
 
 # Get subnet IDs and ensure they are in different Availability Zones
 locals {
-  public_subnet_ids  = [for subnet in data.aws_subnets.public.subnets: subnet.id]
-  private_subnet_ids = [for subnet in data.aws_subnets.private.subnets: subnet.id]
+  public_subnet_ids  = data.aws_subnet_ids.public.ids
+  private_subnet_ids = data.aws_subnet_ids.private.ids
 }
 
 # Create an ECS cluster
