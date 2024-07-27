@@ -168,7 +168,7 @@ resource "aws_lb" "webapp_lb" {
 # Create a target group for the load balancer
 resource "aws_lb_target_group" "webapp_tg" {
   name     = "${var.app_name}-webapp-tg"
-  port     = 4567
+  port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.selected.id
 
