@@ -172,6 +172,8 @@ resource "aws_lb_target_group" "webapp_tg" {
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.selected.id
 
+  target_type = "ip"
+
   health_check {
     path                = "/"
     interval            = 30
