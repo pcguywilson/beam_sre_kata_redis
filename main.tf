@@ -15,27 +15,37 @@ data "aws_vpc" "selected" {
   id = var.vpc_id
 }
 
-data "aws_subnet_ids" "public" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name   = "tag:Name"
-    values = ["public"]
-  }
+# Fetch individual public subnets by tag
+data "aws_subnet" "public1" {
+  id = "subnet-b5d2e9dd"
 }
 
-data "aws_subnet_ids" "private" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name   = "tag:Name"
-    values = ["private"]
-  }
+data "aws_subnet" "public2" {
+  id = "subnet-62d4a518"
 }
 
-# Get subnet IDs and ensure they are in different Availability Zones
+# Fetch individual private subnets by tag
+data "aws_subnet" "private1" {
+  id = "subnet-0e9089e98f8cfe21c"
+}
+
+data "aws_subnet" "private2" {
+  id = "subnet-076056f874992d4c5"
+}
+
+# Get subnet IDs
 locals {
-  public_subnet_ids  = data.aws_subnet_ids.public.ids
-  private_subnet_ids = data.aws_subnet_ids.private.ids
+  public_subnet_ids  = [
+    data.aws_subnet.public1.id,
+    data.aws_subnet.public2.id
+  ]
+  private_subnet_ids = [
+    data.aws_subnet.private1.id,
+    data.aws_subnet.private2.id
+  ]
 }
+
+# Define other resources using these subnet IDs
 
 # Create an ECS cluster
 resource "aws_ecs_cluster" "webapp_cluster" {
