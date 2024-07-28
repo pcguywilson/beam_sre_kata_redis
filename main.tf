@@ -11,6 +11,8 @@ locals {
 
 data "aws_availability_zones" "available" {}
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_vpc" "main" {
   cidr_block = "172.31.0.0/16"
   tags       = local.common_tags
@@ -267,7 +269,7 @@ resource "aws_s3_bucket_policy" "alb_logs_policy" {
         Resource = "${aws_s3_bucket.alb_logs.arn}/*",
         Condition = {
           StringLike = {
-            "aws:Referer" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.account_id}:loadbalancer/*"
+            "aws:Referer" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.current.account_id}:loadbalancer/*"
           }
         }
       }
