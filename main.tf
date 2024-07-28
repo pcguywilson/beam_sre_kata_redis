@@ -16,6 +16,9 @@ resource "aws_vpc" "main" {
   tags       = local.common_tags
 }
 
+# Get available availability zones
+data "aws_availability_zones" "available" {}
+
 # Create public subnets
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidr_blocks)
@@ -185,7 +188,7 @@ resource "aws_ecs_service" "webapp_service" {
   load_balancer {
     target_group_arn = aws_lb_target_group.webapp_tg.arn
     container_name   = "${var.app_name}-webapp"
-    container_port   = 4567
+    container_port   = 80
   }
 
   tags = local.common_tags
@@ -235,47 +238,4 @@ resource "aws_lb_listener" "webapp_listener" {
   }
 
   tags = local.common_tags
-}
-
-# Get available availability zones
-data "aws_availability_zones" "available" {}
-
-variable "aws_region" {
-  default = "us-east-2"
-}
-
-variable "resource_owner" {
-  description = "Name used when tagging owner"
-  default     = "SWilson"
-}
-
-variable "app_name" {
-  description = "Name of app"
-  default     = "beamkata"
-}
-
-variable "vpc_cidr_block" {
-  description = "CIDR block for the VPC"
-  default     = "172.31.0.0/16"
-}
-
-variable "public_subnet_cidr_blocks" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["172.31.1.0/24", "172.31.2.0/24"]
-}
-
-variable "private_subnet_cidr_blocks" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["172.31.3.0/24", "172.31.4.0/24"]
-}
-
-variable "redis_node_type" {
-  default = "cache.t2.micro"
-}
-
-variable "docker_image" {
-  description = "Docker image to deploy"
-  default     = "beamdental/sre-kata-app:latest"
 }
