@@ -210,9 +210,13 @@ resource "aws_lb" "webapp_lb" {
 
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${var.app_name}-alb-logs"
-  acl    = "private"
 
   tags = local.common_tags
+}
+
+resource "aws_s3_bucket_acl" "alb_logs_acl" {
+  bucket = aws_s3_bucket.alb_logs.bucket
+  acl    = "private"
 }
 
 resource "aws_lb_target_group" "webapp_tg" {
