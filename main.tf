@@ -10,42 +10,94 @@ locals {
   }
 }
 
-# Use an existing VPC
-data "aws_vpc" "selected" {
-  id = var.vpc_id
+# Create a VPC
+resource "aws_vpc" "main" {
+  cidr_block           = "172.31.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = local.common_tags
 }
 
-# Fetch individual public subnets by tag
-data "aws_subnet" "public1" {
-  id = "subnet-b5d2e9dd"
+# Create public subnets
+resource "aws_subnet" "public" {
+  count = 2
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index)
+  map_public_ip_on_launch = true
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
+
+  tags = merge(local.common_tags, { "Name" = "${var.app_name}-public-${count.index}" })
 }
 
-data "aws_subnet" "public2" {
-  id = "subnet-62d4a518"
+# Create private subnets
+resource "aws_subnet" "private" {
+  count = 2
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 2)
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+
+  tags = merge(local.common_tags, { "Name" = "${var.app_name}-private-${count.index}" })
 }
 
-# Fetch individual private subnets by tag
-data "aws_subnet" "private1" {
-  id = "subnet-0e9089e98f8cfe21c"
+# Create an internet gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = local.common_tags
 }
 
-data "aws_subnet" "private2" {
-  id = "subnet-076056f874992d4c5"
+# Create a NAT gateway
+resource "aws_eip" "nat" {
+  vpc = true
+
+  tags = local.common_tags
 }
 
-# Get subnet IDs
-locals {
-  public_subnet_ids  = [
-    data.aws_subnet.public1.id,
-    data.aws_subnet.public2.id
-  ]
-  private_subnet_ids = [
-    data.aws_subnet.private1.id,
-    data.aws_subnet.private2.id
-  ]
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = local.common_tags
 }
 
-# Define other resources using these subnet IDs
+# Create public route table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_route_table_association" "public" {
+  count     = 2
+  subnet_id = element(aws_subnet.public.*.id, count.index)
+  route_table_id = aws_route_table.public.id
+}
+
+# Create private route table
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_route_table_association" "private" {
+  count     = 2
+  subnet_id = element(aws_subnet.private.*.id, count.index)
+  route_table_id = aws_route_table.private.id
+}
 
 # Create an ECS cluster
 resource "aws_ecs_cluster" "webapp_cluster" {
@@ -57,7 +109,7 @@ resource "aws_ecs_cluster" "webapp_cluster" {
 resource "aws_security_group" "webapp_sg" {
   name        = "${var.app_name}-sg"
   description = "Allow traffic to beamkata web app"
-  vpc_id      = data.aws_vpc.selected.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 4567
@@ -89,7 +141,7 @@ resource "aws_elasticache_cluster" "redis" {
   engine               = "redis"
   node_type            = var.redis_node_type
   num_cache_nodes      = 1
-  parameter_group_name = "default.redis7"
+  parameter_group_name = "default.redis3.2"
   port                 = 6379
   subnet_group_name    = aws_elasticache_subnet_group.redis_subnet_group.name
 
@@ -99,7 +151,7 @@ resource "aws_elasticache_cluster" "redis" {
 
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   name       = "${var.app_name}-redis-subnet-group"
-  subnet_ids = local.private_subnet_ids
+  subnet_ids = aws_subnet.private.*.id
   tags       = local.common_tags
 }
 
@@ -139,7 +191,7 @@ resource "aws_ecs_service" "webapp_service" {
   desired_count   = 1
 
   network_configuration {
-    subnets         = local.public_subnet_ids
+    subnets         = aws_subnet.public.*.id
     security_groups = [aws_security_group.webapp_sg.id]
   }
 
@@ -158,7 +210,7 @@ resource "aws_lb" "webapp_lb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.webapp_sg.id]
-  subnets            = local.public_subnet_ids
+  subnets            = aws_subnet.public.*.id
 
   enable_deletion_protection = false
 
@@ -168,11 +220,9 @@ resource "aws_lb" "webapp_lb" {
 # Create a target group for the load balancer
 resource "aws_lb_target_group" "webapp_tg" {
   name     = "${var.app_name}-webapp-tg"
-  port     = 80
+  port     = 4567
   protocol = "HTTP"
-  vpc_id   = data.aws_vpc.selected.id
-
-  target_type = "ip"
+  vpc_id   = aws_vpc.main.id
 
   health_check {
     path                = "/"
