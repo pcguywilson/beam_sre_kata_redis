@@ -12,27 +12,23 @@ variable "app_name" {
   default     = "beamkata"
 }
 
-variable "redis_node_type" {
-  default = "cache.t2.micro"
-}
-
-variable "redis_engine_version" {
-  default = "7.0"
-}
-
-variable "docker_image" {
-  description = "Docker image to deploy"
-  default     = "beamdental/sre-kata-app:latest"
-}
-
 variable "public_subnet_cidr_blocks" {
-  description = "List of CIDR blocks for public subnets"
+  description = "List of public subnet CIDR blocks"
   type        = list(string)
   default     = ["172.31.1.0/24", "172.31.2.0/24"]
 }
 
 variable "private_subnet_cidr_blocks" {
-  description = "List of CIDR blocks for private subnets"
+  description = "List of private subnet CIDR blocks"
   type        = list(string)
   default     = ["172.31.3.0/24", "172.31.4.0/24"]
+}
+
+variable "redis_node_type" {
+  default = "cache.t2.micro"
+}
+
+variable "docker_image" {
+  description = "Docker image to deploy"
+  default     = "beamdental/sre-kata-app:latest"
 }
