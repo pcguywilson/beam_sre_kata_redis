@@ -230,12 +230,13 @@ resource "aws_lb" "webapp_lb" {
 resource "aws_lb_target_group" "webapp_tg" {
   name     = "${var.app_name}-webapp-tg"
   port     = 4567
-  protocol = "TCP"
+  protocol = "HTTP" # Change this if you want to use TCP
   vpc_id   = aws_vpc.main.id
-  target_type = "ip" 
+  target_type = "ip"
 
   health_check {
-    protocol = "TCP"
+    protocol = "HTTP"
+    port     = "traffic-port"
   }
 
   tags = local.common_tags
