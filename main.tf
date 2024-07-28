@@ -188,7 +188,7 @@ resource "aws_ecs_service" "webapp_service" {
   load_balancer {
     target_group_arn = aws_lb_target_group.webapp_tg.arn
     container_name   = "${var.app_name}-webapp"
-    container_port   = 80
+    container_port   = 4567
   }
 
   tags = local.common_tags
@@ -210,7 +210,7 @@ resource "aws_lb" "webapp_lb" {
 # Create a target group for the load balancer
 resource "aws_lb_target_group" "webapp_tg" {
   name     = "${var.app_name}-webapp-tg"
-  port     = 80
+  port     = 4567
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
