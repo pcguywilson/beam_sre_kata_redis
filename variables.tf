@@ -24,3 +24,13 @@ variable "docker_image" {
   description = "Docker image to deploy"
   default     = "beamdental/sre-kata-app:latest"
 }
+
+variable "public_subnet_cidr_blocks" {
+  type    = list(string)
+  default = ["172.31.0.0/20", "172.31.16.0/20"]
+}
+
+variable "private_subnet_cidr_blocks" {
+  type    = list(string)
+  default = ["172.31.32.0/20", "172.31.48.0/20"]
+}
