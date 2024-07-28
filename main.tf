@@ -87,6 +87,28 @@ resource "aws_ecs_cluster" "webapp_cluster" {
   tags = local.common_tags
 }
 
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "${var.app_name}-ecs-task-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
 resource "aws_security_group" "webapp_sg" {
   name        = "${var.app_name}-sg"
   description = "Allow traffic to beamkata web app"
@@ -141,6 +163,7 @@ resource "aws_ecs_task_definition" "webapp_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name      = "${var.app_name}-webapp"
@@ -210,13 +233,19 @@ resource "aws_lb" "webapp_lb" {
 
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${var.app_name}-alb-logs"
+  tags   = local.common_tags
 
-  tags = local.common_tags
-}
+  versioning {
+    enabled = true
+  }
 
-resource "aws_s3_bucket_acl" "alb_logs_acl" {
-  bucket = aws_s3_bucket.alb_logs.bucket
-  acl    = "private"
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
 }
 
 resource "aws_lb_target_group" "webapp_tg" {
