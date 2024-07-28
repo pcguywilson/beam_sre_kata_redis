@@ -17,7 +17,7 @@ variable "redis_node_type" {
 }
 
 variable "redis_engine_version" {
-  default = "3.2.10"
+  default = "7.0"
 }
 
 variable "docker_image" {
@@ -26,11 +26,13 @@ variable "docker_image" {
 }
 
 variable "public_subnet_cidr_blocks" {
-  type    = list(string)
-  default = ["172.31.0.0/20", "172.31.16.0/20"]
+  description = "List of CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["172.31.1.0/24", "172.31.2.0/24"]
 }
 
 variable "private_subnet_cidr_blocks" {
-  type    = list(string)
-  default = ["172.31.32.0/20", "172.31.48.0/20"]
+  description = "List of CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["172.31.3.0/24", "172.31.4.0/24"]
 }
