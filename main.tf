@@ -11,8 +11,6 @@ locals {
 
 data "aws_availability_zones" "available" {}
 
-data "aws_caller_identity" "current" {}
-
 resource "aws_vpc" "main" {
   cidr_block = "172.31.0.0/16"
   tags       = local.common_tags
@@ -123,13 +121,6 @@ resource "aws_security_group" "webapp_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -174,6 +165,7 @@ resource "aws_ecs_task_definition" "webapp_task" {
     portMappings = [{
       containerPort = 4567
       hostPort      = 4567
+      protocol      = "tcp"
     }]
     logConfiguration = {
       logDriver = "awslogs"
@@ -194,69 +186,82 @@ resource "aws_ecs_task_definition" "webapp_task" {
   tags = local.common_tags
 }
 
-resource "aws_lb" "webapp_lb" {
-  name               = "${var.app_name}-webapp-lb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.webapp_sg.id]
-  subnets            = aws_subnet.public[*].id
+resource "aws_security_group" "alb_sg" {
+  name        = "${var.app_name}-alb-sg"
+  description = "Allow TCP inbound traffic"
+  vpc_id      = aws_vpc.main.id
 
-  enable_deletion_protection = false
+  ingress {
+    from_port   = 4567
+    to_port     = 4567
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-  tags = local.common_tags
-}
-
-resource "aws_lb_target_group" "webapp_tg" {
-  name     = "${var.app_name}-webapp-tg"
-  port     = 4567
-  protocol = "HTTP" # Change this if you want to use TCP
-  vpc_id   = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    protocol = "HTTP"
-    port     = "traffic-port"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = local.common_tags
 }
 
-resource "aws_lb_listener" "webapp_http" {
+resource "aws_lb" "webapp_lb" {
+  name               = "${var.app_name}-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = aws_subnet.public[*].id
+  tags               = local.common_tags
+}
+
+resource "aws_lb_target_group" "webapp_tg" {
+  name     = "${var.app_name}-tg"
+  port     = 4567
+  protocol = "TCP"
+  vpc_id   = aws_vpc.main.id
+  target_type = "ip"
+  
+  health_check {
+    protocol = "TCP"
+  }
+  tags = local.common_tags
+}
+
+resource "aws_lb_listener" "webapp_tcp_listener" {
   load_balancer_arn = aws_lb.webapp_lb.arn
-  port              = "80"
-  protocol          = "HTTP"
+  port              = "4567"
+  protocol          = "TCP"
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.webapp_tg.arn
   }
-
-  tags = local.common_tags
-
-  depends_on = [aws_lb.webapp_lb]
 }
 
 resource "aws_ecs_service" "webapp_service" {
-  name            = "${var.app_name}-webapp-service"
+  name            = "${var.app_name}-service"
   cluster         = aws_ecs_cluster.webapp_cluster.id
   task_definition = aws_ecs_task_definition.webapp_task.arn
-  launch_type     = "FARGATE"
   desired_count   = 1
-
+  launch_type     = "FARGATE"
   network_configuration {
-    subnets         = aws_subnet.public[*].id
-    security_groups = [aws_security_group.webapp_sg.id]
+    subnets          = aws_subnet.public[*].id
+    security_groups  = [aws_security_group.webapp_sg.id]
+    assign_public_ip = true
   }
-
   load_balancer {
     target_group_arn = aws_lb_target_group.webapp_tg.arn
     container_name   = "${var.app_name}-webapp"
     container_port   = 4567
   }
-
+  depends_on = [
+    aws_lb.webapp_lb,
+    aws_lb_listener.webapp_tcp_listener
+  ]
   tags = local.common_tags
-
-  depends_on = [aws_lb_listener.webapp_http]
 }
 
 resource "aws_cloudwatch_log_group" "ecs_logs" {
