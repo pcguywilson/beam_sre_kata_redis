@@ -234,16 +234,22 @@ resource "aws_lb" "webapp_lb" {
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${var.app_name}-alb-logs"
   tags   = local.common_tags
+}
 
-  versioning {
-    enabled = true
+resource "aws_s3_bucket_versioning" "alb_logs_versioning" {
+  bucket = aws_s3_bucket.alb_logs.bucket
+
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs_sse" {
+  bucket = aws_s3_bucket.alb_logs.bucket
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
 }
