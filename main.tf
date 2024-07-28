@@ -111,7 +111,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
 
 resource "aws_security_group" "webapp_sg" {
   name        = "${var.app_name}-sg"
-  description = "Allow traffic to web app"
+  description = "Allow traffic to beamkata web app"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -254,12 +254,32 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs_sse" {
   }
 }
 
+resource "aws_s3_bucket_policy" "alb_logs_policy" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = "*",
+        Action = "s3:PutObject",
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*",
+        Condition = {
+          StringLike = {
+            "aws:Referer" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.account_id}:loadbalancer/*"
+          }
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_lb_target_group" "webapp_tg" {
   name     = "${var.app_name}-webapp-tg"
   port     = 4567
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
-  target_type = "ip"  # Changed to 'ip'
 
   health_check {
     protocol = "TCP"
@@ -279,22 +299,4 @@ resource "aws_lb_listener" "webapp_http" {
   }
 
   tags = local.common_tags
-}
-
-resource "aws_s3_bucket_policy" "alb_logs_policy" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
-        },
-        Action = "s3:PutObject",
-        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
-      }
-    ]
-  })
 }
