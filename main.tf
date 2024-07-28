@@ -20,8 +20,7 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidr_blocks)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = element(var.public_subnet_cidr_blocks, count.index)
-  map_public_ip_on_launch = true
+  cidr_block        = var.public_subnet_cidr_blocks[count.index]
   availability_zone = element(data.aws_availability_zones.available.names, count.index)
   tags              = local.common_tags
 }
@@ -30,65 +29,60 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   count = length(var.private_subnet_cidr_blocks)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = element(var.private_subnet_cidr_blocks, count.index)
+  cidr_block        = var.private_subnet_cidr_blocks[count.index]
   availability_zone = element(data.aws_availability_zones.available.names, count.index)
   tags              = local.common_tags
 }
 
-data "aws_availability_zones" "available" {}
-
-# Create an internet gateway
+# Create an Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = local.common_tags
 }
 
-# Create public route table
+# Create NAT Gateway and Elastic IP for NAT
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = local.common_tags
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+  tags          = local.common_tags
+}
+
+# Create route tables for public and private subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
+  tags   = local.common_tags
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
-  tags = local.common_tags
 }
 
-# Create NAT Gateway
-resource "aws_eip" "nat" {
-  vpc = true
-  tags = local.common_tags
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = element(aws_subnet.public.*.id, 0)
-  tags          = local.common_tags
-}
-
-# Create private route table
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
+  tags   = local.common_tags
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
+    nat_gateway_id = aws_nat_gateway.main.id
   }
-
-  tags = local.common_tags
 }
 
 # Associate route tables with subnets
 resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = element(aws_subnet.public[*].id, count.index)
+  count          = length(var.public_subnet_cidr_blocks)
+  subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = element(aws_subnet.private[*].id, count.index)
+  count          = length(var.private_subnet_cidr_blocks)
+  subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
 
@@ -132,7 +126,6 @@ resource "aws_security_group" "webapp_sg" {
 resource "aws_elasticache_cluster" "redis" {
   cluster_id           = "${var.app_name}-redis-cluster"
   engine               = "redis"
-  engine_version       = var.redis_engine_version
   node_type            = var.redis_node_type
   num_cache_nodes      = 1
   parameter_group_name = "default.redis7"
@@ -140,12 +133,12 @@ resource "aws_elasticache_cluster" "redis" {
   subnet_group_name    = aws_elasticache_subnet_group.redis_subnet_group.name
 
   security_group_ids = [aws_security_group.webapp_sg.id]
-  tags = local.common_tags
+  tags               = local.common_tags
 }
 
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   name       = "${var.app_name}-redis-subnet-group"
-  subnet_ids = aws_subnet.private.*.id
+  subnet_ids = aws_subnet.private[*].id
   tags       = local.common_tags
 }
 
@@ -185,7 +178,7 @@ resource "aws_ecs_service" "webapp_service" {
   desired_count   = 1
 
   network_configuration {
-    subnets         = aws_subnet.public.*.id
+    subnets         = aws_subnet.public[*].id
     security_groups = [aws_security_group.webapp_sg.id]
   }
 
@@ -204,7 +197,7 @@ resource "aws_lb" "webapp_lb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.webapp_sg.id]
-  subnets            = aws_subnet.public.*.id
+  subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
 
@@ -217,7 +210,6 @@ resource "aws_lb_target_group" "webapp_tg" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-  target_type = "ip"
 
   health_check {
     path                = "/"
@@ -243,4 +235,47 @@ resource "aws_lb_listener" "webapp_listener" {
   }
 
   tags = local.common_tags
+}
+
+# Get available availability zones
+data "aws_availability_zones" "available" {}
+
+variable "aws_region" {
+  default = "us-east-2"
+}
+
+variable "resource_owner" {
+  description = "Name used when tagging owner"
+  default     = "SWilson"
+}
+
+variable "app_name" {
+  description = "Name of app"
+  default     = "beamkata"
+}
+
+variable "vpc_cidr_block" {
+  description = "CIDR block for the VPC"
+  default     = "172.31.0.0/16"
+}
+
+variable "public_subnet_cidr_blocks" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["172.31.1.0/24", "172.31.2.0/24"]
+}
+
+variable "private_subnet_cidr_blocks" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["172.31.3.0/24", "172.31.4.0/24"]
+}
+
+variable "redis_node_type" {
+  default = "cache.t2.micro"
+}
+
+variable "docker_image" {
+  description = "Docker image to deploy"
+  default     = "beamdental/sre-kata-app:latest"
 }
