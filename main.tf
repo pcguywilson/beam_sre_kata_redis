@@ -211,7 +211,7 @@ resource "aws_security_group" "alb_sg" {
 resource "aws_lb" "webapp_lb" {
   name               = "${var.app_name}-lb"
   internal           = false
-  load_balancer_type = "application"
+  load_balancer_type = "network"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = aws_subnet.public[*].id
   tags               = local.common_tags
@@ -223,16 +223,17 @@ resource "aws_lb_target_group" "webapp_tg" {
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
   target_type = "ip"
-  
+
   health_check {
     protocol = "TCP"
   }
+
   tags = local.common_tags
 }
 
 resource "aws_lb_listener" "webapp_tcp_listener" {
   load_balancer_arn = aws_lb.webapp_lb.arn
-  port              = "4567"
+  port              = 4567
   protocol          = "TCP"
 
   default_action {
