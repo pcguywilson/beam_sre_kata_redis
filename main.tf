@@ -224,57 +224,7 @@ resource "aws_lb" "webapp_lb" {
 
   enable_deletion_protection = false
 
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.bucket
-    prefix  = "alb-logs"
-    enabled = true
-  }
-
   tags = local.common_tags
-}
-
-resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${var.app_name}-alb-logs"
-  tags   = local.common_tags
-}
-
-resource "aws_s3_bucket_versioning" "alb_logs_versioning" {
-  bucket = aws_s3_bucket.alb_logs.bucket
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs_sse" {
-  bucket = aws_s3_bucket.alb_logs.bucket
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "alb_logs_policy" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = "*",
-        Action = "s3:PutObject",
-        Resource = "${aws_s3_bucket.alb_logs.arn}/*",
-        Condition = {
-          StringLike = {
-            "aws:Referer" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.current.account_id}:loadbalancer/*"
-          }
-        }
-      }
-    ]
-  })
 }
 
 resource "aws_lb_target_group" "webapp_tg" {
@@ -282,6 +232,7 @@ resource "aws_lb_target_group" "webapp_tg" {
   port     = 4567
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
+  target_type = "ip" 
 
   health_check {
     protocol = "TCP"
@@ -301,4 +252,10 @@ resource "aws_lb_listener" "webapp_http" {
   }
 
   tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "ecs_logs" {
+  name              = "/ecs/${var.app_name}"
+  retention_in_days = 7
+  tags              = local.common_tags
 }
