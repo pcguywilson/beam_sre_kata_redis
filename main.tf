@@ -2,7 +2,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Define a tag map
 locals {
   common_tags = {
     Owner = var.resource_owner
@@ -10,92 +9,84 @@ locals {
   }
 }
 
-# Create a VPC
+data "aws_availability_zones" "available" {}
+
 resource "aws_vpc" "main" {
   cidr_block = "172.31.0.0/16"
   tags       = local.common_tags
 }
 
-# Get available availability zones
-data "aws_availability_zones" "available" {}
-
-# Create public subnets
 resource "aws_subnet" "public" {
-  count = length(var.public_subnet_cidr_blocks)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.public_subnet_cidr_blocks[count.index]
-  availability_zone = element(data.aws_availability_zones.available.names, count.index)
-  tags              = local.common_tags
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = element(var.public_subnet_cidr_blocks, count.index)
+  map_public_ip_on_launch = true
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
+  tags                    = local.common_tags
 }
 
-# Create private subnets
 resource "aws_subnet" "private" {
-  count = length(var.private_subnet_cidr_blocks)
+  count             = 2
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr_blocks[count.index]
+  cidr_block        = element(var.private_subnet_cidr_blocks, count.index)
   availability_zone = element(data.aws_availability_zones.available.names, count.index)
   tags              = local.common_tags
 }
 
-# Create an Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = local.common_tags
 }
 
-# Create NAT Gateway and Elastic IP for NAT
 resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = local.common_tags
+  vpc = true
 }
 
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
+  subnet_id     = element(aws_subnet.public[*].id, 0)
   tags          = local.common_tags
 }
 
-# Create route tables for public and private subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  tags   = local.common_tags
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
+
+  tags = local.common_tags
 }
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  tags   = local.common_tags
 
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main.id
   }
+
+  tags = local.common_tags
 }
 
-# Associate route tables with subnets
 resource "aws_route_table_association" "public" {
-  count          = length(var.public_subnet_cidr_blocks)
-  subnet_id      = aws_subnet.public[count.index].id
+  count          = length(aws_subnet.public[*].id)
+  subnet_id      = element(aws_subnet.public[*].id, count.index)
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
-  count          = length(var.private_subnet_cidr_blocks)
-  subnet_id      = aws_subnet.private[count.index].id
+  count          = length(aws_subnet.private[*].id)
+  subnet_id      = element(aws_subnet.private[*].id, count.index)
   route_table_id = aws_route_table.private.id
 }
 
-# Create an ECS cluster
 resource "aws_ecs_cluster" "webapp_cluster" {
   name = "${var.app_name}-cluster"
   tags = local.common_tags
 }
 
-# Create a security group
 resource "aws_security_group" "webapp_sg" {
   name        = "${var.app_name}-sg"
   description = "Allow traffic to beamkata web app"
@@ -125,7 +116,6 @@ resource "aws_security_group" "webapp_sg" {
   tags = local.common_tags
 }
 
-# Create an ElastiCache Redis cluster
 resource "aws_elasticache_cluster" "redis" {
   cluster_id           = "${var.app_name}-redis-cluster"
   engine               = "redis"
@@ -136,7 +126,7 @@ resource "aws_elasticache_cluster" "redis" {
   subnet_group_name    = aws_elasticache_subnet_group.redis_subnet_group.name
 
   security_group_ids = [aws_security_group.webapp_sg.id]
-  tags               = local.common_tags
+  tags = local.common_tags
 }
 
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
@@ -145,7 +135,6 @@ resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   tags       = local.common_tags
 }
 
-# Create an ECS task definition
 resource "aws_ecs_task_definition" "webapp_task" {
   family                   = "${var.app_name}-webapp-task"
   network_mode             = "awsvpc"
@@ -161,6 +150,14 @@ resource "aws_ecs_task_definition" "webapp_task" {
       containerPort = 4567
       hostPort      = 4567
     }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/${var.app_name}"
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
     environment = [
       {
         name  = "REDIS_URL"
@@ -172,7 +169,6 @@ resource "aws_ecs_task_definition" "webapp_task" {
   tags = local.common_tags
 }
 
-# Create an ECS service
 resource "aws_ecs_service" "webapp_service" {
   name            = "${var.app_name}-webapp-service"
   cluster         = aws_ecs_cluster.webapp_cluster.id
@@ -194,7 +190,6 @@ resource "aws_ecs_service" "webapp_service" {
   tags = local.common_tags
 }
 
-# Create an Application Load Balancer
 resource "aws_lb" "webapp_lb" {
   name               = "${var.app_name}-webapp-lb"
   internal           = false
@@ -204,32 +199,36 @@ resource "aws_lb" "webapp_lb" {
 
   enable_deletion_protection = false
 
-  tags = local.common_tags
-}
-
-# Create a target group for the load balancer
-resource "aws_lb_target_group" "webapp_tg" {
-  name        = "${var.app_name}-webapp-tg"
-  port        = 4567
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    path                = "/"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 5
-    unhealthy_threshold = 2
-    matcher             = "200-399"
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.bucket
+    prefix  = "alb-logs"
+    enabled = true
   }
 
   tags = local.common_tags
 }
 
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "${var.app_name}-alb-logs"
+  acl    = "private"
 
-# Create a listener for the load balancer
-resource "aws_lb_listener" "webapp_listener" {
+  tags = local.common_tags
+}
+
+resource "aws_lb_target_group" "webapp_tg" {
+  name     = "${var.app_name}-webapp-tg"
+  port     = 4567
+  protocol = "TCP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    protocol = "TCP"
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lb_listener" "webapp_http" {
   load_balancer_arn = aws_lb.webapp_lb.arn
   port              = "80"
   protocol          = "HTTP"
