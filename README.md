@@ -75,7 +75,7 @@ The following outputs are defined in `outputs.tf`:
 After the deployment, you can access your web application using the DNS name of the load balancer. This DNS name is outputted as `load_balancer_dns`:
 
 ```sh
-echo $(terraform output load_balancer_dns)
+echo $(terraform output load_balancer_dns):4567
 ```
 
 ## Cleaning Up
