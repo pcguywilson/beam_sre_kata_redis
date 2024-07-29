@@ -42,7 +42,11 @@ The following outputs are defined in `outputs.tf`:
 | `load_balancer_dns` | DNS name of the load balancer           |
 | `redis_url`         | Redis URL used by the web application   |
 
-## Deployment
+## Deployment Instructions
+```sh
+git clone <repository-url>
+cd project-directory
+```
 
 1. **Initialize Terraform:**
 
