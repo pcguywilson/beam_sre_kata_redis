@@ -43,30 +43,32 @@ The following outputs are defined in `outputs.tf`:
 | `redis_url`         | Redis URL used by the web application   |
 
 ## Deployment Instructions
-```sh
-git clone <repository-url>
-cd project-directory
-```
+1. **Clone Repo:**
 
-1. **Initialize Terraform:**
+  ```sh
+  git clone <repository-url>
+  cd project-directory
+  ```
+
+2. **Initialize Terraform:**
 
     ```sh
     terraform init
     ```
 
-2. **Validate the Configuration:**
+3. **Validate the Configuration:**
 
     ```sh
     terraform validate
     ```
 
-3. **Plan the Deployment:**
+4. **Plan the Deployment:**
 
     ```sh
     terraform plan
     ```
 
-4. **Apply the Configuration:**
+5. **Apply the Configuration:**
 
     ```sh
     terraform apply
