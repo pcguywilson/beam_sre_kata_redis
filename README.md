@@ -5,8 +5,9 @@ This repository contains Terraform code to deploy a web application on AWS using
 ## Prerequisites
 
 - [Terraform](https://www.terraform.io/downloads.html) installed
-- AWS CLI configured with appropriate IAM permissions
-- I elected to use the existing VPC with ID `vpc-dfd0c3b7` in region `us-east-2` with public and private subnets tagged as `Name=public` and `Name=private` respectively
+- AWS CLI configured with appropriate IAM permissions to create resources (IAM, VPC, ECS, ElastiCache, etc.)
+- Docker image for the web application uploaded to a container registry (e.g., Amazon ECR, Docker Hub).
+  
 
 ## Project Structure
 
