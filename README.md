@@ -84,9 +84,6 @@ To destroy the resources created by this Terraform configuration:
 
 Confirm the destroy step by typing `yes` when prompted.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
